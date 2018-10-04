@@ -6,7 +6,9 @@ import time
 import re
 import getpass
 import datetime
+import decimal
 
+import requests
 import mnemonic
 import pywaves as pw
 
@@ -23,6 +25,13 @@ EXIT_NO_COMMAND = 1
 EXIT_SEED_INVALID = 10
 EXIT_BALANCE_INSUFFICIENT = 11
 EXIT_EXPIRY_INVALID = 12
+EXIT_INVALID_RECIPIENT = 13
+
+def get_asset_fee(assetid):
+    url = f"{pw.NODE}/assets/details/{assetid}";
+    response = requests.get(url).json()
+    min_asset_fee = response["minSponsoredAssetFee"]
+    return min_asset_fee
 
 def construct_parser():
     # construct argument parser
@@ -42,6 +51,9 @@ def construct_parser():
 
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
+
+    parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
+    parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
 
     return parser
 
@@ -121,7 +133,6 @@ def fund_run(args):
             print(f"Skipping {addr.address}, balance ({balance}) is not 0")
             continue
         result = sender.sendAsset(addr, asset, foil.amount)
-        print(result)
         foil.expiry = expiry
         foil.funding_date = time.time()
         foil.funding_txid = result["id"]
@@ -136,6 +147,30 @@ def show_run(args):
         foils = Foil.all(db_session)
     for foil in foils:
         print(foil.to_json())
+
+def sweep_run(args):
+    # check recipient is a valid address
+    if not pw.validateAddress(args.recipient):
+        print(f"ERROR: {args.recipient} is not a valid address")
+        sys.exit(EXIT_INVALID_RECIPIENT)
+    recipient = pw.Address(args.recipient)
+
+    # sweep expired foils
+    asset = pw.Asset(args.assetid)
+    asset_fee = get_asset_fee(args.assetid)
+    date = time.time()
+    foils = Foil.all(db_session)
+    for foil in foils:
+        if foil.expiry and date >= foil.expiry:
+            addr = pw.Address(privateKey=foil.private_key)
+            balance = addr.balance(assetId=args.assetid)
+            if balance == 0:
+                print(f"Skipping {addr.address}, balance is 0")
+                continue
+            result = addr.sendAsset(recipient, asset, balance - asset_fee, \
+                feeAsset=asset, txFee=asset_fee)
+            print(result)
+            print(f"Swept {addr.address}, txid {result['id']}")
 
 if __name__ == "__main__":
     # parse arguments
@@ -162,6 +197,8 @@ if __name__ == "__main__":
         function = fund_run
     elif args.command == "show":
         function = show_run
+    elif args.command == "sweep":
+        function = sweep_run
     else:
         parser.print_help()
         sys.exit(EXIT_NO_COMMAND)
