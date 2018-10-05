@@ -52,7 +52,7 @@ class Foil(Base):
 
     @classmethod
     def next_batch_id(cls, session):
-        batch = 1
+        batch = 1000
         while True:
             foils = cls.get_batch(session, batch)
             if not foils:

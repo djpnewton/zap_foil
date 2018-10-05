@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import argparse
 import time
 import re
@@ -11,6 +12,9 @@ import decimal
 import requests
 import mnemonic
 import pywaves as pw
+import qrcode
+import PIL
+from PIL import ImageFont
 
 from database import db_session, init_db
 from models import Foil
@@ -51,6 +55,8 @@ def construct_parser():
 
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
+
+    parser_images = subparsers.add_parser("images", help="Create qrcode images")
 
     parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
     parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
@@ -148,6 +154,35 @@ def show_run(args):
     for foil in foils:
         print(foil.to_json())
 
+def images_run(args):
+    # create image directory
+    path = "images"
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    foils = Foil.all(db_session)
+    for foil in foils:
+        filename = f"b{foil.batch}_{foil.id}.png"
+        filename = os.path.join(path, filename)
+
+        # create qr code image
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, \
+            box_size=10, border=4)
+        qr.add_data(foil.private_key)
+        qr.make()
+        qr_img = qr.make_image(fill_color="black", back_color="transparent")
+
+        # create template image
+        template = PIL.Image.new("RGBA", (1000, 1000))
+        # draw batch text
+        d = PIL.ImageDraw.Draw(template)
+        fnt = ImageFont.truetype("Andale Mono.ttf", 15)
+        d.text((400, 900), f"b{foil.batch}", font=fnt, fill="black")
+        # paste qr code
+        template.paste(qr_img, (300, 100))
+
+        template.save(filename)
+
 def sweep_run(args):
     # check recipient is a valid address
     if not pw.validateAddress(args.recipient):
@@ -197,6 +232,8 @@ if __name__ == "__main__":
         function = fund_run
     elif args.command == "show":
         function = show_run
+    elif args.command == "images":
+        function = images_run
     elif args.command == "sweep":
         function = sweep_run
     else:

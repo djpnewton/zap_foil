@@ -1,5 +1,7 @@
 *~
 *.swp
+.DS_Store
 
 zap_foils.db
+images/
 __pycache__/
