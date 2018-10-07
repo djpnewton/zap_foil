@@ -155,6 +155,36 @@ def show_run(args):
         print(foil.to_json())
 
 def images_run(args):
+    # consts
+    dpi = 300
+    mm_per_in = 25.4
+
+    # page size
+    width_mm = 210
+    height_mm = 297
+    width_in = width_mm / mm_per_in
+    height_in = height_mm / mm_per_in
+    width = width_in * dpi
+    height = height_in * dpi
+
+    # qrcode width and y position
+    qrcode_y_mm = 50
+    qrcode_width_mm = 100
+
+    # calc qrcode pix values
+    qrcode_y = qrcode_y_mm / mm_per_in * dpi
+    qrcode_width = qrcode_width_mm / mm_per_in * dpi
+    qrcode_x = (width / 2) - (qrcode_width / 2)
+    qrcode_border = 4
+    qrcode_boxes = 30 + qrcode_border + qrcode_border
+    qrcode_box_size = int(qrcode_width / qrcode_boxes)
+
+    # batch text
+    font_size = 50
+    font = ImageFont.truetype("Andale Mono.ttf", font_size)
+    text_y_mm = 250
+    text_y = text_y_mm / mm_per_in * dpi
+
     # create image directory
     path = "images"
     if not os.path.exists(path):
@@ -167,19 +197,21 @@ def images_run(args):
 
         # create qr code image
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, \
-            box_size=10, border=4)
+            box_size=qrcode_box_size, border=qrcode_border)
         qr.add_data(foil.private_key)
         qr.make()
         qr_img = qr.make_image(fill_color="black", back_color="transparent")
 
         # create template image
-        template = PIL.Image.new("RGBA", (1000, 1000))
+        template = PIL.Image.new("RGBA", (int(width), int(height)))
         # draw batch text
         d = PIL.ImageDraw.Draw(template)
-        fnt = ImageFont.truetype("Andale Mono.ttf", 15)
-        d.text((400, 900), f"b{foil.batch}", font=fnt, fill="black")
+        text = f"b{foil.batch}"
+        text_width = font.getsize(text)[0]
+        text_x = (width / 2) - (text_width / 2)
+        d.text((int(text_x), int(text_y)), text, font=font, fill="black")
         # paste qr code
-        template.paste(qr_img, (300, 100))
+        template.paste(qr_img, (int(qrcode_x), int(qrcode_y)))
 
         template.save(filename)
 
