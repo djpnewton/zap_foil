@@ -3,3 +3,4 @@ pywaves
 mnemonic
 qrcode
 pillow
+reportlab

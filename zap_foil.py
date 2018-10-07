@@ -15,6 +15,8 @@ import pywaves as pw
 import qrcode
 import PIL
 from PIL import ImageFont
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch, cm
 
 from database import db_session, init_db
 from models import Foil
@@ -190,6 +192,10 @@ def images_run(args):
     if not os.path.exists(path):
         os.makedirs(path)
 
+    # create pdf
+    fn = os.path.join(path, "images.pdf")
+    pdf = canvas.Canvas(fn, pagesize=(width_mm, height_mm))
+
     foils = Foil.all(db_session)
     for foil in foils:
         filename = f"b{foil.batch}_{foil.id}.png"
@@ -213,7 +219,17 @@ def images_run(args):
         # paste qr code
         template.paste(qr_img, (int(qrcode_x), int(qrcode_y)))
 
+        # save image
+        print(filename)
         template.save(filename)
+
+        # add page to pdf
+        pdf.drawImage(filename, 0, 0, width_mm, height_mm, mask="auto")
+        pdf.showPage()
+
+    # save pdf
+    print("saving pdf..")
+    pdf.save()
 
 def sweep_run(args):
     # check recipient is a valid address
