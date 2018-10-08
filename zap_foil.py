@@ -74,7 +74,7 @@ def create_run(args):
         # create entry in db
         date = time.time()
         addr = pw.Address()
-        foil = Foil(date, batch, addr.privateKey, args.amount, None, None, None)
+        foil = Foil(date, batch, addr.seed, args.amount, None, None, None)
         db_session.add(foil)
         db_session.commit()
 
@@ -132,7 +132,7 @@ def fund_run(args):
     # add funds and expiry
     asset = pw.Asset(args.assetid)
     for foil in foils:
-        addr = pw.Address(privateKey=foil.private_key)
+        addr = pw.Address(seed=foil.seed)
         if foil.funding_txid:
             print(f"Skipping {addr.address}, funding_txid is not empty")
             continue
@@ -204,7 +204,7 @@ def images_run(args):
         # create qr code image
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, \
             box_size=qrcode_box_size, border=qrcode_border)
-        qr.add_data(foil.private_key)
+        qr.add_data(foil.seed)
         qr.make()
         qr_img = qr.make_image(fill_color="black", back_color="transparent")
 
@@ -245,7 +245,7 @@ def sweep_run(args):
     foils = Foil.all(db_session)
     for foil in foils:
         if foil.expiry and date >= foil.expiry:
-            addr = pw.Address(privateKey=foil.private_key)
+            addr = pw.Address(seed=foil.seed)
             balance = addr.balance(assetId=args.assetid)
             if balance == 0:
                 print(f"Skipping {addr.address}, balance is 0")

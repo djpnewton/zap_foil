@@ -12,7 +12,7 @@ from database import Base
 class FoilSchema(Schema):
     date = fields.Integer()
     batch = fields.Integer()
-    private_key = fields.String()
+    seed = fields.String()
     amount = fields.Integer()
     funding_txid = fields.String()
     funding_date = fields.Integer()
@@ -23,16 +23,16 @@ class Foil(Base):
     id = Column(Integer, primary_key=True)
     date = Column(Integer, nullable=False)
     batch = Column(Integer, nullable=False)
-    private_key = Column(String, nullable=False, unique=True)
+    seed = Column(String, nullable=False, unique=True)
     amount = Column(Integer, nullable=False)
     funding_txid = Column(String, nullable=True, unique=True)
     funding_date = Column(Integer, nullable=True)
     expiry = Column(Integer, nullable=True)
 
-    def __init__(self, date, batch, private_key, amount, funding_txid, funding_date, expiry):
+    def __init__(self, date, batch, seed, amount, funding_txid, funding_date, expiry):
         self.date = date
         self.batch = batch
-        self.private_key = private_key
+        self.seed = seed
         self.amount = amount
         self.funding_txid = funding_txid
         self.funding_date = funding_date
