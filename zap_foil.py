@@ -178,7 +178,7 @@ def images_run(args):
     qrcode_width = qrcode_width_mm / mm_per_in * dpi
     qrcode_x = (width / 2) - (qrcode_width / 2)
     qrcode_border = 4
-    qrcode_boxes = 30 + qrcode_border + qrcode_border
+    qrcode_boxes = 37 + qrcode_border + qrcode_border
     qrcode_box_size = int(qrcode_width / qrcode_boxes)
 
     # batch text
@@ -217,6 +217,7 @@ def images_run(args):
         text_x = (width / 2) - (text_width / 2)
         d.text((int(text_x), int(text_y)), text, font=font, fill="black")
         # paste qr code
+        qrcode_x = (width / 2) - (qr_img.pixel_size / 2) # fix x offset of qr code image (we had just estimated it before)
         template.paste(qr_img, (int(qrcode_x), int(qrcode_y)))
 
         # save image
