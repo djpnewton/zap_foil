@@ -25,7 +25,7 @@ TESTNET_NODE = "https://testnet1.wavesnodes.com"
 MAINNET_NODE = "https://nodes.wavesnodes.com"
 
 TESTNET_ASSETID = "CgUrFtinLXEbJwJVjwwcppk4Vpz1nMmR3H5cQaDcUcfe"
-MAINNET_ASSETID = "nada"
+MAINNET_ASSETID = "9R3iLi4qGLVWKc16Tg98gmRvgg1usGEYd7SgC1W5D6HB"
 
 EXIT_NO_COMMAND = 1
 EXIT_SEED_INVALID = 10
