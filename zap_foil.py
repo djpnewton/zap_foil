@@ -57,6 +57,7 @@ def construct_parser():
 
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
+    parser_show.add_argument("-c", "--check", action="store_true", help="Query the balance for each foil")
 
     parser_images = subparsers.add_parser("images", help="Create qrcode images")
 
@@ -154,7 +155,12 @@ def show_run(args):
     else:
         foils = Foil.all(db_session)
     for foil in foils:
-        print(foil.to_json())
+        json = foil.to_json()
+        if args.check:
+            addr = pw.Address(seed=foil.seed)
+            balance = addr.balance(assetId=args.assetid)
+            json["balance"] = balance
+        print(json)
 
 def images_run(args):
     # consts
