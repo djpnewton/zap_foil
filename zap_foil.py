@@ -168,30 +168,33 @@ def images_run(args):
     mm_per_in = 25.4
 
     # page size
-    width_mm = 210
-    height_mm = 297
+    width_mm = 160
+    height_mm = 120
     width_in = width_mm / mm_per_in
     height_in = height_mm / mm_per_in
     width = width_in * dpi
     height = height_in * dpi
 
     # qrcode width and y position
-    qrcode_y_mm = 50
-    qrcode_width_mm = 100
+    qrcode_x_center_mm = 20.4 + (39/2.0)
+    qrcode_y_center_mm = 22.1 + (39/2.0)
+    qrcode_x_center = qrcode_x_center_mm / mm_per_in * dpi
+    qrcode_y_center = qrcode_y_center_mm / mm_per_in * dpi
+    qrcode_width_mm = 39
 
     # calc qrcode pix values
-    qrcode_y = qrcode_y_mm / mm_per_in * dpi
     qrcode_width = qrcode_width_mm / mm_per_in * dpi
-    qrcode_x = (width / 2) - (qrcode_width / 2)
-    qrcode_border = 4
+    qrcode_border = 0
     qrcode_boxes = 37 + qrcode_border + qrcode_border
     qrcode_box_size = int(qrcode_width / qrcode_boxes)
 
     # batch text
-    font_size = 50
+    font_size = 30
     font = ImageFont.truetype("Andale Mono.ttf", font_size)
-    text_y_mm = 250
-    text_y = text_y_mm / mm_per_in * dpi
+    text_x_center_mm = 29.3 + (21.5/2.0)
+    text_y_center_mm = 120 - 9 - (8.9/2.0)
+    text_x_center = text_x_center_mm / mm_per_in * dpi
+    text_y_center = text_y_center_mm / mm_per_in * dpi
 
     # create image directory
     path = "images"
@@ -219,11 +222,13 @@ def images_run(args):
         # draw batch text
         d = PIL.ImageDraw.Draw(template)
         text = f"b{foil.batch}"
-        text_width = font.getsize(text)[0]
-        text_x = (width / 2) - (text_width / 2)
+        text_width, text_height = font.getsize(text)
+        text_x = text_x_center - (text_width / 2)
+        text_y = text_y_center - (text_height / 2)
         d.text((int(text_x), int(text_y)), text, font=font, fill="black")
         # paste qr code
-        qrcode_x = (width / 2) - (qr_img.pixel_size / 2) # fix x offset of qr code image (we had just estimated it before)
+        qrcode_x = qrcode_x_center - (qr_img.size[0] / 2)
+        qrcode_y = qrcode_y_center - (qr_img.size[1] / 2)
         template.paste(qr_img, (int(qrcode_x), int(qrcode_y)))
 
         # save image
