@@ -164,6 +164,7 @@ def show_run(args):
 
 def images_run(args):
     # consts
+    ppi = 72 # points per inch
     dpi = 300
     mm_per_in = 25.4
 
@@ -174,6 +175,8 @@ def images_run(args):
     height_in = height_mm / mm_per_in
     width = width_in * dpi
     height = height_in * dpi
+    width_pts = width_in * ppi
+    height_pts = height_in * ppi
 
     # qrcode width and y position
     qrcode_x_center_mm = 20.4 + (39/2.0)
@@ -203,7 +206,7 @@ def images_run(args):
 
     # create pdf
     fn = os.path.join(path, "images.pdf")
-    pdf = canvas.Canvas(fn, pagesize=(width_mm, height_mm))
+    pdf = canvas.Canvas(fn, pagesize=(width_pts, height_pts))
 
     foils = Foil.all(db_session)
     for foil in foils:
@@ -236,7 +239,7 @@ def images_run(args):
         template.save(filename)
 
         # add page to pdf
-        pdf.drawImage(filename, 0, 0, width_mm, height_mm, mask="auto")
+        pdf.drawImage(filename, 0, 0, width_pts, height_pts, mask="auto")
         pdf.showPage()
 
     # save pdf
