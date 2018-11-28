@@ -61,6 +61,8 @@ def construct_parser():
 
     parser_images = subparsers.add_parser("images", help="Create qrcode images")
 
+    parser_csv = subparsers.add_parser("csv", help="Create csv")
+
     parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
     parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
 
@@ -246,6 +248,14 @@ def images_run(args):
     print("saving pdf..")
     pdf.save()
 
+def csv_run(args):
+    foils = Foil.all(db_session)
+    data = ""
+    for foil in foils:
+        data += f"{foil.batch},\"{foil.seed}\"\n"
+    with open("codes.csv", "w") as f:
+        f.write(data)
+
 def sweep_run(args):
     # check recipient is a valid address
     if not pw.validateAddress(args.recipient):
@@ -297,6 +307,8 @@ if __name__ == "__main__":
         function = show_run
     elif args.command == "images":
         function = images_run
+    elif args.command == "csv":
+        function = csv_run
     elif args.command == "sweep":
         function = sweep_run
     else:
