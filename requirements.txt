@@ -4,3 +4,5 @@ mnemonic
 qrcode
 pillow
 reportlab
+sqlalchemy
+marshmallow
