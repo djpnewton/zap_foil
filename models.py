@@ -24,7 +24,7 @@ class Foil(Base):
     date = Column(Integer, nullable=False)
     batch = Column(Integer, nullable=False)
     seed = Column(String, nullable=False, unique=True)
-    amount = Column(Integer, nullable=False)
+    amount = Column(Integer, nullable=True)
     funding_txid = Column(String, nullable=True, unique=True)
     funding_date = Column(Integer, nullable=True)
     expiry = Column(Integer, nullable=True)

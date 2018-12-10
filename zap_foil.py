@@ -49,10 +49,11 @@ def construct_parser():
 
     parser_create = subparsers.add_parser("create", help="Create foils")
     parser_create.add_argument("batchsize", metavar="BATCHSIZE", type=int, help="The number of foils to create in this batch")
-    parser_create.add_argument("amount", metavar="AMOUNT", type=int, help="The amount of ZAP in each foil")
+    parser_create.add_argument("batchcount", metavar="BATCHCOUNT", type=int, help="The number of batches to create")
 
     parser_fund = subparsers.add_parser("fund", help="Fund foils")
     parser_fund.add_argument("batch", metavar="BATCH", type=int, help="The batch to fund")
+    parser_fund.add_argument("amount", metavar="AMOUNT", type=int, help="The amount of in each foil in this batch (in zap cents!)")
     parser_fund.add_argument("-e", "--expiry", type=str, help="The expiry time to use (if you want to override the default - ie two months), number of seconds or '<X>days'")
 
     parser_show = subparsers.add_parser("show", help="Show foils")
@@ -72,21 +73,26 @@ def create_run(args):
     # get free batch id
     batch = Foil.next_batch_id(db_session)
 
-    # create foil
-    for i in range(args.batchsize):
-        # create entry in db
-        date = time.time()
-        addr = pw.Address()
-        foil = Foil(date, batch, addr.seed, args.amount, None, None, None)
-        db_session.add(foil)
-        db_session.commit()
+    for i in range(args.batchcount):
+        # create foil
+        for i in range(args.batchsize):
+            # create entry in db
+            date = time.time()
+            addr = pw.Address()
+            foil = Foil(date, batch, addr.seed, None, None, None, None)
+            db_session.add(foil)
+        print(f"batch {batch}")
+        # increment batch number
+        batch += 1
+
+    db_session.commit()
 
 def fund_run(args):
     # get batch and calculate funds required
     foils = Foil.get_batch(db_session, args.batch)
     required_funds = 0
     for foil in foils:
-        required_funds += foil.amount
+        required_funds += args.amount
     print(f"Required zap: {required_funds}")
 
     # get seed from user
@@ -143,13 +149,13 @@ def fund_run(args):
         if balance > 0:
             print(f"Skipping {addr.address}, balance ({balance}) is not 0")
             continue
-        result = sender.sendAsset(addr, asset, foil.amount)
+        result = sender.sendAsset(addr, asset, args.amount, feeAsset=asset, txFee=1)
         foil.expiry = expiry
         foil.funding_date = time.time()
         foil.funding_txid = result["id"]
         db_session.add(foil)
         db_session.commit()
-        print(f"Funded {addr.address} with {foil.amount}")
+        print(f"Funded {addr.address} with {args.amount}")
 
 def show_run(args):
     if args.batch or args.batch == 0:
