@@ -47,7 +47,8 @@ current_clump_index = 0
 while current_batch <= batch_end:
     value = clumps[current_clump_index % len(clumps)]
     value *= zap_cents # convert to zap cents
-    batches.append((current_batch, value))
+    tx_fee = 1
+    batches.append((current_batch, value + tx_fee))
     current_clump_index += 1
     current_batch += 1
 total_zap = 0

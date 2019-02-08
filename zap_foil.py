@@ -113,6 +113,8 @@ def _create_pwaddr(seed, required_funds):
         print(f"ERROR: balance of account ({balance}) not great enough ({required_funds} required)")
         sys.exit(EXIT_BALANCE_INSUFFICIENT)
 
+    return sender
+
 def _fund(seed, batch, amount, provided_expiry, required_funds, assetid):
     _check_mnemonic(seed)
 
@@ -140,6 +142,7 @@ def _fund(seed, batch, amount, provided_expiry, required_funds, assetid):
     
     # add funds and expiry
     asset = pw.Asset(assetid)
+    foils = Foil.get_batch(db_session, batch)
     for foil in foils:
         addr = pw.Address(seed=foil.seed)
         if foil.funding_txid:
@@ -178,9 +181,7 @@ def fund_multiple_run(args):
     # get batches and calculate funds required
     required_funds = 0
     for batch in batch_spec:
-        print(batch)
         foils = Foil.get_batch(db_session, batch[0])
-        print(len(foils))
         for foil in foils:
             required_funds += batch[1]
     print(f"Required zap: {required_funds}")
@@ -189,6 +190,10 @@ def fund_multiple_run(args):
     seed = getpass.getpass("Seed: ")
 
     for batch in batch_spec:
+        required_funds = 0
+        foils = Foil.get_batch(db_session, batch[0])
+        for foil in foils:
+            required_funds += batch[1]
         _fund(seed, batch[0], batch[1], args.expiry, required_funds, args.assetid)
 
 def show_run(args):
