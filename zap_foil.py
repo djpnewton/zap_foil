@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 
 import sys
 import os
@@ -7,7 +7,7 @@ import time
 import re
 import getpass
 import datetime
-import decimal
+import json
 
 import requests
 import mnemonic
@@ -56,6 +56,10 @@ def construct_parser():
     parser_fund.add_argument("amount", metavar="AMOUNT", type=int, help="The amount of in each foil in this batch (in zap cents!)")
     parser_fund.add_argument("-e", "--expiry", type=str, help="The expiry time to use (if you want to override the default - ie two months), number of seconds or '<X>days'")
 
+    parser_fund_multiple = subparsers.add_parser("fund_multiple", help="Fund foils from a batch spec file")
+    parser_fund_multiple.add_argument("filename", metavar="FILENAME", type=str, help="The batch spec file")
+    parser_fund_multiple.add_argument("-e", "--expiry", type=str, help="The expiry time to use (if you want to override the default - ie two months), number of seconds or '<X>days'")
+
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
     parser_show.add_argument("-c", "--check", action="store_true", help="Query the balance for each foil")
@@ -87,17 +91,7 @@ def create_run(args):
 
     db_session.commit()
 
-def fund_run(args):
-    # get batch and calculate funds required
-    foils = Foil.get_batch(db_session, args.batch)
-    required_funds = 0
-    for foil in foils:
-        required_funds += args.amount
-    print(f"Required zap: {required_funds}")
-
-    # get seed from user
-    seed = getpass.getpass("Seed: ")
-
+def _check_mnemonic(seed):
     # check seed is valid bip39 mnemonic
     m = mnemonic.Mnemonic("english")
     if m.check(seed.strip()):
@@ -109,6 +103,7 @@ def fund_run(args):
         if a not in ("y", "Y"):
             sys.exit(EXIT_SEED_INVALID)
 
+def _create_pwaddr(seed, required_funds):
     # create pywaves sender address
     sender = pw.Address(seed=seed)
     print(f"Account: {sender.address}")
@@ -118,19 +113,24 @@ def fund_run(args):
         print(f"ERROR: balance of account ({balance}) not great enough ({required_funds} required)")
         sys.exit(EXIT_BALANCE_INSUFFICIENT)
 
+def _fund(seed, batch, amount, provided_expiry, required_funds, assetid):
+    _check_mnemonic(seed)
+
+    sender = _create_pwaddr(seed, required_funds)
+
     # set expiry
     date = time.time()
     two_months = 60 * 60 * 24 * 30 * 2
     expiry = date + two_months
-    if args.expiry:
+    if provided_expiry:
         pattern = r"(\d+)days"
-        m = re.search(pattern, args.expiry)
+        m = re.search(pattern, provided_expiry)
         if m:
             days = int(m.group(1))
             expiry = date + days * 60 * 60 * 24
         else:
             try:
-                expiry = date + int(args.expiry)
+                expiry = date + int(provided_expiry)
             except:
                 print("ERROR: expiry not a valid number")
                 sys.exit(EXIT_EXPIRY_INVALID)
@@ -139,23 +139,57 @@ def fund_run(args):
     print(f"Batch expiry: {nice_expiry} ({expiry})")
     
     # add funds and expiry
-    asset = pw.Asset(args.assetid)
+    asset = pw.Asset(assetid)
     for foil in foils:
         addr = pw.Address(seed=foil.seed)
         if foil.funding_txid:
             print(f"Skipping {addr.address}, funding_txid is not empty")
             continue
-        balance = addr.balance(assetId=args.assetid)
+        balance = addr.balance(assetId=assetid)
         if balance > 0:
             print(f"Skipping {addr.address}, balance ({balance}) is not 0")
             continue
-        result = sender.sendAsset(addr, asset, args.amount, feeAsset=asset, txFee=1)
+        result = sender.sendAsset(addr, asset, amount, feeAsset=asset, txFee=1)
         foil.expiry = expiry
         foil.funding_date = time.time()
         foil.funding_txid = result["id"]
         db_session.add(foil)
         db_session.commit()
-        print(f"Funded {addr.address} with {args.amount}")
+        print(f"Funded {addr.address} with {amount}")
+
+def fund_run(args):
+    # get batch and calculate funds required
+    foils = Foil.get_batch(db_session, args.batch)
+    required_funds = 0
+    for foil in foils:
+        required_funds += args.amount
+    print(f"Required zap: {required_funds}")
+
+    # get seed from user
+    seed = getpass.getpass("Seed: ")
+
+    _fund(seed, args.batch, args.amount, args.expiry, required_funds, args.assetid)
+
+def fund_multiple_run(args):
+    # read batch spec file
+    with open(args.filename, "r") as f:
+        batch_spec = json.loads(f.read())
+
+    # get batches and calculate funds required
+    required_funds = 0
+    for batch in batch_spec:
+        print(batch)
+        foils = Foil.get_batch(db_session, batch[0])
+        print(len(foils))
+        for foil in foils:
+            required_funds += batch[1]
+    print(f"Required zap: {required_funds}")
+
+    # get seed from user
+    seed = getpass.getpass("Seed: ")
+
+    for batch in batch_spec:
+        _fund(seed, batch[0], batch[1], args.expiry, required_funds, args.assetid)
 
 def show_run(args):
     if args.batch or args.batch == 0:
@@ -309,6 +343,8 @@ if __name__ == "__main__":
         function = create_run
     elif args.command == "fund":
         function = fund_run
+    elif args.command == "fund_multiple":
+        function = fund_multiple_run
     elif args.command == "show":
         function = show_run
     elif args.command == "images":
