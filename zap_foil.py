@@ -34,7 +34,7 @@ EXIT_EXPIRY_INVALID = 12
 EXIT_INVALID_RECIPIENT = 13
 
 def get_asset_fee(assetid):
-    url = f"{pw.NODE}/assets/details/{assetid}";
+    url = f"{pw.NODE}/assets/details/{assetid}"
     response = requests.get(url).json()
     min_asset_fee = response["minSponsoredAssetFee"]
     return min_asset_fee
@@ -60,6 +60,9 @@ def construct_parser():
     parser_fund_multiple.add_argument("filename", metavar="FILENAME", type=str, help="The batch spec file")
     parser_fund_multiple.add_argument("-e", "--expiry", type=str, help="The expiry time to use (if you want to override the default - ie two months), number of seconds or '<X>days'")
 
+    parser_check_multiple = subparsers.add_parser("check_multiple", help="Check foils from a batch spec file")
+    parser_check_multiple.add_argument("filename", metavar="FILENAME", type=str, help="The batch spec file")
+
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
     parser_show.add_argument("-c", "--check", action="store_true", help="Query the balance for each foil")
@@ -67,6 +70,7 @@ def construct_parser():
     parser_images = subparsers.add_parser("images", help="Create qrcode images")
 
     parser_csv = subparsers.add_parser("csv", help="Create csv")
+    parser_csv.add_argument("-s", "--seeds", action="store_true", help="Include the seeds (default: false)")
 
     parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
     parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
@@ -160,6 +164,22 @@ def _fund(seed, batch, amount, provided_expiry, required_funds, assetid):
         db_session.commit()
         print(f"Funded {addr.address} with {amount}")
 
+def _check(batch, amount, assetid):
+    print(f":: batch {batch} - amount {amount}")
+    asset = pw.Asset(assetid)
+    foils = Foil.get_batch(db_session, batch)
+    for foil in foils:
+        addr = pw.Address(seed=foil.seed)
+        balance = addr.balance(assetId=assetid)
+        if balance > 0:
+            print(f"balance: {balance} addr: {addr.address}")
+            if balance != amount and balance != amount - 1:
+                print(f"ERROR - address ({addr.address}) has wrong balance")
+                sys.exit(2)
+        else:
+            print(f"ERROR - address ({addr.address}) has no balance")
+            sys.exit(1)
+
 def fund_run(args):
     # get batch and calculate funds required
     foils = Foil.get_batch(db_session, args.batch)
@@ -196,7 +216,17 @@ def fund_multiple_run(args):
             required_funds += batch[1]
         _fund(seed, batch[0], batch[1], args.expiry, required_funds, args.assetid)
 
+def check_multiple_run(args):
+    # read batch spec file
+    with open(args.filename, "r") as f:
+        batch_spec = json.loads(f.read())
+
+    for batch in batch_spec:
+        foils = Foil.get_batch(db_session, batch[0])
+        _check(batch[0], batch[1], args.assetid)
+
 def show_run(args):
+    pw.setOffline()
     if args.batch or args.batch == 0:
         foils = Foil.get_batch(db_session, args.batch)
     else:
@@ -210,6 +240,7 @@ def show_run(args):
         print(json)
 
 def images_run(args):
+    pw.setOffline()
     # consts
     ppi = 72 # points per inch
     dpi = 300
@@ -294,12 +325,21 @@ def images_run(args):
     pdf.save()
 
 def csv_run(args):
+    pw.setOffline()
     foils = Foil.all(db_session)
-    data = ""
-    for foil in foils:
-        data += f"{foil.batch},\"{foil.seed}\"\n"
     with open("codes.csv", "w") as f:
-        f.write(data)
+        data = "batch,address,amount,funding_txid,funding_date"
+        if args.seeds:
+            data += ",seed"
+        f.write(data + "\n")
+        for foil in foils:
+            addr = pw.Address(seed=foil.seed)
+            data = f"{foil.batch},{addr.address},{foil.amount},{foil.funding_txid},{foil.funding_date}"
+            if args.seeds:
+                data += f"\"{foil.seed}\""
+            f.write(data + "\n")
+            sys.stdout.write(".")
+            sys.stdout.flush()
 
 def sweep_run(args):
     # check recipient is a valid address
@@ -350,6 +390,8 @@ if __name__ == "__main__":
         function = fund_run
     elif args.command == "fund_multiple":
         function = fund_multiple_run
+    elif args.command == "check_multiple":
+        function = check_multiple_run
     elif args.command == "show":
         function = show_run
     elif args.command == "images":
