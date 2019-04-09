@@ -4,8 +4,10 @@ import sys
 import os
 import json
 
-batch_start = 1202
-batch_end = 1351
+batch_start = 1800
+batch_end = 2299
+batch_start = 1500
+batch_end = 1799
 batch_size = 10
 zap_cents = 100
 

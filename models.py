@@ -51,6 +51,14 @@ class Foil(Base):
         return session.query(cls).filter(cls.batch == batch).all()
 
     @classmethod
+    def get_batches_starting_at(cls, session, batch):
+        return session.query(cls).filter(cls.batch >= batch).all()
+
+    @classmethod
+    def get_batches_between(cls, session, batch_start, batch_end):
+        return session.query(cls).filter(and_(cls.batch >= batch_start, cls.batch <= batch_end)).all()
+
+    @classmethod
     def next_batch_id(cls, session):
         batch = 1000
         while True:

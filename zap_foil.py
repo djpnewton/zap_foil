@@ -32,6 +32,10 @@ EXIT_SEED_INVALID = 10
 EXIT_BALANCE_INSUFFICIENT = 11
 EXIT_EXPIRY_INVALID = 12
 EXIT_INVALID_RECIPIENT = 13
+EXIT_TOO_MANY_TXS = 14
+EXIT_NOT_TRANSFER_ASSET = 15
+EXIT_UNRECOGNISED_ASSET_ID = 16
+EXIT_WRONG_RECIPIENT = 17
 
 def get_asset_fee(assetid):
     url = f"{pw.NODE}/assets/details/{assetid}"
@@ -63,6 +67,10 @@ def construct_parser():
     parser_check_multiple = subparsers.add_parser("check_multiple", help="Check foils from a batch spec file")
     parser_check_multiple.add_argument("filename", metavar="FILENAME", type=str, help="The batch spec file")
 
+    parser_fill_missing_fund_data = subparsers.add_parser("fill_missing_fund_data", help="If we dont have a record of the funding tx, fill it in now")
+    parser_fill_missing_fund_data.add_argument("batch_start", metavar="BATCH_START", type=int, help="The batch number to start at")
+    parser_fill_missing_fund_data.add_argument("batch_end", metavar="BATCH_END", type=int, help="The batch number to end at")
+
     parser_show = subparsers.add_parser("show", help="Show foils")
     parser_show.add_argument("-b", "--batch", type=int, default=None, help="The batch to show")
     parser_show.add_argument("-c", "--check", action="store_true", help="Query the balance for each foil")
@@ -70,7 +78,8 @@ def construct_parser():
     parser_images = subparsers.add_parser("images", help="Create qrcode images")
 
     parser_csv = subparsers.add_parser("csv", help="Create csv")
-    parser_csv.add_argument("-s", "--seeds", action="store_true", help="Include the seeds (default: false)")
+    parser_csv.add_argument("-b", "--batch", type=int, default=0, help="The batch to start with (default: 0)")
+    parser_csv.add_argument("-s", "--seeds", action="store_true", help="Only the seeds (default: false)")
 
     parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
     parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
@@ -78,6 +87,7 @@ def construct_parser():
     return parser
 
 def create_run(args):
+    pw.setOffline()
     # get free batch id
     batch = Foil.next_batch_id(db_session)
 
@@ -225,6 +235,42 @@ def check_multiple_run(args):
         foils = Foil.get_batch(db_session, batch[0])
         _check(batch[0], batch[1], args.assetid)
 
+def fill_missing_fund_data_run(args):
+    two_months = 60 * 60 * 24 * 30 * 2
+    foils = Foil.get_batches_between(db_session, args.batch_start, args.batch_end)
+    for foil in foils:
+        if not foil.funding_txid:
+            addr = pw.Address(seed=foil.seed)
+            print(f":: b{foil.batch}, addr: {addr.address} - no funding tx ::")
+            api = f"/transactions/address/{addr.address}/limit/100"
+            txs = pw.wrapper(api)[0]
+            if len(txs) >= 100:
+                print("ERROR: too many txs")
+                sys.exit(EXIT_TOO_MANY_TXS)
+            tx = txs[len(txs)-1]
+            if tx["type"] != 4:
+                print("ERROR: tx not 'transfer asset' type")
+                sys.exit(EXIT_NOT_TRANSFER_ASSET)
+            if not tx["assetId"] in (MAINNET_ASSETID, TESTNET_ASSETID):
+                print("ERROR: unrecognised asset id")
+                sys.exit(EXIT_UNRECOGNISED_ASSET_ID)
+            if tx["recipient"] != addr.address:
+                print("ERROR: wrong recipeint")
+                sys.exit(EXIT_WRONG_RECIPIENT)
+            funding_txid = tx["id"]
+            funding_date = int(tx["timestamp"] / 1000)
+            expiry = funding_date + two_months
+            amount = tx["amount"]
+
+            print(f"   found funding: {amount} ZAP CENTS")
+            print(f"   setting expiry: {expiry}, funding_txid: {funding_txid}")
+
+            foil.expiry = expiry
+            foil.funding_date = funding_date
+            foil.funding_txid = funding_txid
+            foil.amount = amount
+    db_session.commit()
+
 def show_run(args):
     pw.setOffline()
     if args.batch or args.batch == 0:
@@ -326,17 +372,21 @@ def images_run(args):
 
 def csv_run(args):
     pw.setOffline()
-    foils = Foil.all(db_session)
+    foils = Foil.get_batches_starting_at(db_session, args.batch)
     with open("codes.csv", "w") as f:
-        data = "batch,address,amount,funding_txid,funding_date"
+        data = "batch,"
         if args.seeds:
-            data += ",seed"
+            data += "seed"
+        else:
+            data += "address,amount,funding_txid,funding_date"
         f.write(data + "\n")
         for foil in foils:
             addr = pw.Address(seed=foil.seed)
-            data = f"{foil.batch},{addr.address},{foil.amount},{foil.funding_txid},{foil.funding_date}"
+            data = f"{foil.batch},"
             if args.seeds:
                 data += f"\"{foil.seed}\""
+            else:
+                data = f"{addr.address},{foil.amount},{foil.funding_txid},{foil.funding_date}"
             f.write(data + "\n")
             sys.stdout.write(".")
             sys.stdout.flush()
@@ -392,6 +442,8 @@ if __name__ == "__main__":
         function = fund_multiple_run
     elif args.command == "check_multiple":
         function = check_multiple_run
+    elif args.command == "fill_missing_fund_data":
+        function = fill_missing_fund_data_run
     elif args.command == "show":
         function = show_run
     elif args.command == "images":
