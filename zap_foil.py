@@ -83,6 +83,9 @@ def construct_parser():
 
     parser_sweep = subparsers.add_parser("sweep", help="Sweep expired foils")
     parser_sweep.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the swept funds")
+    parser_sweep.add_argument("batch_start", metavar="BATCH_START", type=int, help="The start batch number")
+    parser_sweep.add_argument("batch_end", metavar="BATCH_END", type=int, help="The end batch number")
+    parser_sweep.add_argument("ignore_expiry", metavar="IGNORE_EXPIRY", type=bool, help="Whether to ignore expiry")
 
     return parser
 
@@ -152,7 +155,7 @@ def _fund(seed, batch, amount, provided_expiry, required_funds, assetid):
                 sys.exit(EXIT_EXPIRY_INVALID)
     dt = datetime.datetime.fromtimestamp(expiry)
     nice_expiry = dt.strftime("%Y/%m/%d %H:%M:%S")
-    print(f"Batch expiry: {nice_expiry} ({expiry})")
+    print(f"Batch (#{batch}) expiry: {nice_expiry} ({expiry})")
     
     # add funds and expiry
     asset = pw.Asset(assetid)
@@ -386,12 +389,13 @@ def csv_run(args):
             if args.seeds:
                 data += f"\"{foil.seed}\""
             else:
-                data = f"{addr.address},{foil.amount},{foil.funding_txid},{foil.funding_date}"
+                data += f"{addr.address},{foil.amount},{foil.funding_txid},{foil.funding_date}"
             f.write(data + "\n")
             sys.stdout.write(".")
             sys.stdout.flush()
 
 def sweep_run(args):
+    pw.setOnline()
     # check recipient is a valid address
     if not pw.validateAddress(args.recipient):
         print(f"ERROR: {args.recipient} is not a valid address")
@@ -402,18 +406,20 @@ def sweep_run(args):
     asset = pw.Asset(args.assetid)
     asset_fee = get_asset_fee(args.assetid)
     date = time.time()
-    foils = Foil.all(db_session)
+    foils = Foil.get_batches_between(db_session, args.batch_start, args.batch_end)
     for foil in foils:
-        if foil.expiry and date >= foil.expiry:
+        if args.ignore_expiry or foil.expiry and date >= foil.expiry:
             addr = pw.Address(seed=foil.seed)
             balance = addr.balance(assetId=args.assetid)
             if balance == 0:
-                print(f"Skipping {addr.address}, balance is 0")
+                print(f"Skipping {foil.batch} {addr.address}, balance is 0")
                 continue
             result = addr.sendAsset(recipient, asset, balance - asset_fee, \
                 feeAsset=asset, txFee=asset_fee)
             print(result)
-            print(f"Swept {addr.address}, txid {result['id']}")
+            print(f"Swept {foil.batch} {addr.address}, txid {result['id']}")
+        else:
+            print(f"Skipping {foil.batch} {addr.address}, not yet expired")
 
 if __name__ == "__main__":
     # parse arguments

@@ -4,18 +4,17 @@ import sys
 import os
 import json
 
-batch_start = 1800
-batch_end = 2299
-batch_start = 1500
-batch_end = 1799
+batch_start = 2000
+batch_end = 2199
 batch_size = 10
 zap_cents = 100
 
 clump_size = 10
 
 batch_allocations = (
-        (80, 5),
-        (10, 10),
+        (50, 5),
+        (30, 10),
+        (10, 15),
         (10, 20))
 
 batch_count = batch_end - (batch_start - 1)
